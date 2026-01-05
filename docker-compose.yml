@@ -3,7 +3,7 @@ services:
     build: .
     container_name: qt-app
     environment:
-      - SOURCE_IP=192.168.1.9
+      - SOURCE_IP=192.168.1.8
       - RTSP_PORT=8554
       - UDP_PORT=5005
       - DISPLAY=${DISPLAY}

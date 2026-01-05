@@ -124,12 +124,14 @@ class VideoStream(QWidget):
         right_button.setAutoRepeatDelay(100)
         right_button.setAutoRepeatInterval(200)
         reset_button.clicked.connect(self._move_reset)
+        picture_button.clicked.connect(self._take_picture)
+        video_button.clicked.connect(self._take_video)
 
         # Start stream
         self.start_stream()
 
     def _on_data_received(self, data):
-        print(data)
+        print("Ack: ", sdata)
 
     def start_stream(self):
         self.timer.start(16)
@@ -149,7 +151,7 @@ class VideoStream(QWidget):
             time.sleep(0.5)
             self.cap = cv2.VideoCapture(f'rtsp://{self._source_ip}:{self._source_port}/video', cv2.CAP_FFMPEG)
             if not self.cap.isOpened():
-                pixmap = QPixmap("video_error.jpg")
+                pixmap = QPixmap("src/video_error.jpg")
                 self.video_label.setPixmap(pixmap)
 
     def _increase_zoom(self):
@@ -194,6 +196,14 @@ class VideoStream(QWidget):
         self._pan = 100
         self._tilt = 80
         self._send_angles()
+
+    def _take_picture(self):
+        message = Protocol.create_cameracontrol_cmd(0)
+        self.udp_client.send_message(message)
+
+    def  _take_video(self):
+        message = Protocol.create_cameracontrol_cmd(1)
+        self.udp_client.send_message(message)
 
     def _update_label(self):
         self.zoom_label.setText(str(self._zoom_factor))
