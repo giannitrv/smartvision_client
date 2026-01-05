@@ -2,11 +2,12 @@ import sys
 import os
 import math
 import cv2
-from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QWidget, QGroupBox
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtNetwork import QUdpSocket, QHostAddress
-from PyQt5.QtCore import QTimer, Qt, QByteArray
-from protocol import Protocol
+import time
+from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGroupBox
+from PyQt5.QtGui import QImage, QPixmap, QIcon
+from PyQt5.QtCore import QTimer, Qt, QSize
+from include.udpclient import UdpClient
+from include.protocol import Protocol
 
 class VideoStream(QWidget):
     def __init__(self):
@@ -14,18 +15,21 @@ class VideoStream(QWidget):
         self._source_ip = (os.getenv('SOURCE_IP'))
         self._source_port = (os.getenv('RTSP_PORT'))
         self._udp_port = (os.getenv('UDP_PORT'))
-        self.sock = QUdpSocket()
+
         self._zoom_factor = 1.0
-        self._pitch = 100
-        # Impostiamo la porta di ricezione del client
-        self.client_port = 12346  # Porta su cui il client riceve risposte
-        self.sock.bind(QHostAddress.Any, self.client_port)
+        self._pan = 100
+        self._tilt = 80
+
+        # Initialize UDP Client
+        client_port = 12346
+        self.udp_client = UdpClient(self._source_ip, self._udp_port, client_port)
+        self.udp_client.data_received.connect(self._on_data_received)
         # Layouts
         main_layout = QHBoxLayout()
         left_layout = QVBoxLayout()
         right_layout = QVBoxLayout()
         zoom_layout = QVBoxLayout()
-        move_layout = QVBoxLayout()
+        move_layout = QGridLayout()
         control_layout = QVBoxLayout()
         # Widgets
         self.video_label = QLabel()
@@ -38,14 +42,27 @@ class VideoStream(QWidget):
         self.zoom_label = QLabel(str(self._zoom_factor))
         zoom_in_button = QPushButton('+')
         zoom_out_button = QPushButton('-')
-        up_button = QPushButton('Move up')
-        down_button = QPushButton('Move down')
-        left_button = QPushButton('Move left')
-        right_button = QPushButton('Move right')
-        picture_putton = QPushButton("Picture")
-        video_putton = QPushButton("Video")
+        up_button = QPushButton()
+        up_button.setIcon(QIcon('src/up_arrow.png'))
+        up_button.setIconSize(QSize(24, 24))
+        up_button.setFixedSize(30, 30)
+        down_button = QPushButton()
+        down_button.setIcon(QIcon('src/down_arrow.png'))
+        down_button.setIconSize(QSize(24, 24))
+        down_button.setFixedSize(30, 30)
+        left_button = QPushButton()
+        left_button.setIcon(QIcon('src/left_arrow.png'))
+        left_button.setIconSize(QSize(24, 24))
+        left_button.setFixedSize(30, 30)
+        right_button = QPushButton()
+        right_button.setIcon(QIcon('src/right_arrow.png'))
+        right_button.setIconSize(QSize(24, 24))
+        right_button.setFixedSize(30, 30)
+        reset_button = QPushButton('Reset')
+        picture_button = QPushButton("Picture")
+        video_button = QPushButton("Video")
         zoom_gb = QGroupBox("Zoom")
-        angle_gb = QGroupBox("Angles")
+        move_gb = QGroupBox("Move")
         control_gb = QGroupBox("Control")
         # Add widget to layout
         left_layout.addWidget(play_button)
@@ -60,16 +77,17 @@ class VideoStream(QWidget):
         zoom_layout.setAlignment(self.zoom_label, Qt.AlignHCenter)
         left_layout.addStretch()
 
-        right_layout.addWidget(angle_gb)
-        angle_gb.setLayout(move_layout)
-        move_layout.addWidget(up_button)
-        move_layout.addWidget(down_button)
-        move_layout.addWidget(left_button)
-        move_layout.addWidget(right_button)
+        right_layout.addWidget(move_gb)
+        move_gb.setLayout(move_layout)
+        move_layout.addWidget(up_button, 0, 1)
+        move_layout.addWidget(down_button, 2, 1)
+        move_layout.addWidget(left_button, 1, 0)
+        move_layout.addWidget(right_button, 1, 2)
+        move_layout.addWidget(reset_button, 3, 0, 1, 3)
         right_layout.addWidget(control_gb)
         control_gb.setLayout(control_layout)
-        control_layout.addWidget(picture_putton)
-        control_layout.addWidget(video_putton)
+        control_layout.addWidget(picture_button)
+        control_layout.addWidget(video_button)
         right_layout.addStretch()
 
         main_layout.addLayout(left_layout)
@@ -78,7 +96,7 @@ class VideoStream(QWidget):
         # Set main layout
         self.setLayout(main_layout)
         # Capture RTSP stream
-        self.cap = cv2.VideoCapture(f'rtsp://{self._source_ip}:{self._source_port}/mystream')
+        self.cap = cv2.VideoCapture(f'rtsp://{self._source_ip}:{self._source_port}/video', cv2.CAP_FFMPEG)
         # Timer for frame update
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_frame)
@@ -92,17 +110,26 @@ class VideoStream(QWidget):
         up_button.clicked.connect(self._move_up)
         up_button.setAutoRepeat(True)
         up_button.setAutoRepeatDelay(100)
-        up_button.setAutoRepeatInterval(1000)
+        up_button.setAutoRepeatInterval(200)
+        down_button.clicked.connect(self._move_down)
+        down_button.setAutoRepeat(True)
+        down_button.setAutoRepeatDelay(100)
+        down_button.setAutoRepeatInterval(200)
+        left_button.clicked.connect(self._move_left)
+        left_button.setAutoRepeat(True)
+        left_button.setAutoRepeatDelay(100)
+        left_button.setAutoRepeatInterval(200)
+        right_button.clicked.connect(self._move_right)
+        right_button.setAutoRepeat(True)
+        right_button.setAutoRepeatDelay(100)
+        right_button.setAutoRepeatInterval(200)
+        reset_button.clicked.connect(self._move_reset)
 
-        self.sock.readyRead.connect(self.readPendingDatagrams)
         # Start stream
         self.start_stream()
 
-    def readPendingDatagrams(self):
-        while self.sock.hasPendingDatagrams():
-            datagram_size = self.sock.pendingDatagramSize()
-            datagram = self.sock.receiveDatagram(datagram_size)
-            print(datagram.data())
+    def _on_data_received(self, data):
+        print(data)
 
     def start_stream(self):
         self.timer.start(16)
@@ -119,20 +146,23 @@ class VideoStream(QWidget):
             qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
             self.video_label.setPixmap(QPixmap.fromImage(qt_image))
         else:
-            pixmap = QPixmap("video_error.jpg")
-            self.video_label.setPixmap(pixmap)
+            time.sleep(0.5)
+            self.cap = cv2.VideoCapture(f'rtsp://{self._source_ip}:{self._source_port}/video', cv2.CAP_FFMPEG)
+            if not self.cap.isOpened():
+                pixmap = QPixmap("video_error.jpg")
+                self.video_label.setPixmap(pixmap)
 
     def _increase_zoom(self):
         if self._zoom_factor < 5.0:
             self._zoom_factor += 0.5
-            self.slider.setValue(int(self._zoom_factor * 2))
+            self.slider.setValue(int(self._zoom_factor*2))
             self._update_label()
             self._send_zoom()
 
     def _decreasse_zoom(self):
         if self._zoom_factor > 1.0:
             self._zoom_factor -= 0.5
-            self.slider.setValue(int(self._zoom_factor * 2))
+            self.slider.setValue(int(self._zoom_factor*2))
             self._update_label()
             self._send_zoom()
 
@@ -141,16 +171,29 @@ class VideoStream(QWidget):
         self._update_label()
 
     def _move_up(self):
-        pass
+        if self._tilt < 180:
+            self._tilt += 5
+            self._send_angles()
 
     def _move_down(self):
-        pass
+        if self._tilt > 0:
+            self._tilt -= 5
+            self._send_angles()
 
     def _move_left(self):
-        pass
+        if self._pan < 180:
+            self._pan += 5
+            self._send_angles()
 
     def _move_right(self):
-        pass
+        if self._pan > 0:
+            self._pan -= 5
+            self._send_angles()   
+
+    def _move_reset(self):
+        self._pan = 100
+        self._tilt = 80
+        self._send_angles()
 
     def _update_label(self):
         self.zoom_label.setText(str(self._zoom_factor))
@@ -158,7 +201,11 @@ class VideoStream(QWidget):
     def _send_zoom(self):
         (f, i) = math.modf(self._zoom_factor)
         message = Protocol.create_setzoom_cmd(int(i), int(f*10))
-        self.sock.writeDatagram(message, QHostAddress(self._source_ip), int(self._udp_port))
+        self.udp_client.send_message(message)
+
+    def _send_angles(self):
+        message = Protocol.create_setangles_cmd(self._pan, self._tilt)
+        self.udp_client.send_message(message)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

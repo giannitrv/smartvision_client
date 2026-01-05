@@ -17,6 +17,14 @@ class Protocol():
         return message
 
     @staticmethod
+    def create_setangles_cmd(pan, tilt):
+        message = bytearray()
+        message.extend(Commands.SET_GIMBAL_ANGLE_CMD_ID.value.to_bytes(1, 'little'))
+        message.extend(pan.to_bytes(1, 'little'))
+        message.extend(tilt.to_bytes(1, 'little'))
+        return message
+
+    @staticmethod
     def create_cameracontrol_cmd(control):
         message = bytearray()
         message.extend(Commands.CAMERA_CONTROL_CMD_ID.value.to_bytes(1, 'little'))

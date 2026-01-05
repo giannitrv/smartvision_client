@@ -1,10 +1,9 @@
-
 services:
   qt-app:
     build: .
     container_name: qt-app
     environment:
-      - SOURCE_IP=localhost
+      - SOURCE_IP=192.168.1.9
       - RTSP_PORT=8554
       - UDP_PORT=5005
       - DISPLAY=${DISPLAY}
@@ -15,6 +14,6 @@ services:
       - /run/user/${UID}/pulse/native:/run/user/${UID}/pulse/native
     devices:
       - /dev/snd
-    network_mode: host  # Permette al container di usare la rete dell'host
-    stdin_open: true  # Abilita l'interattività
-    tty: true         # Abilita l'accesso a una TTY (Terminale Virtuale)
+    network_mode: host # Permette al container di usare la rete dell'host
+    stdin_open: true # Abilita l'interattività
+    tty: true # Abilita l'accesso a una TTY (Terminale Virtuale)
