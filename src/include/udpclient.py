@@ -8,9 +8,8 @@ class UdpClient(QObject):
         super().__init__()
         self.source_ip = source_ip
         self.remote_port = int(remote_port)
-        self.local_port = int(local_port)
         self.sock = QUdpSocket(self)
-        self.sock.bind(QHostAddress.Any, self.local_port)
+        self.sock.bind(QHostAddress.Any, local_port)
         self.sock.readyRead.connect(self._read_pending_datagrams)
 
     def _read_pending_datagrams(self):

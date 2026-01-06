@@ -1,29 +1,35 @@
 import sys
-import os
 import math
 import cv2
-import time
+import json
 from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGroupBox
 from PyQt5.QtGui import QImage, QPixmap, QIcon
 from PyQt5.QtCore import QTimer, Qt, QSize
 from include.udpclient import UdpClient
 from include.protocol import Protocol
+from include.discovery import UDPDiscovery
 
-class VideoStream(QWidget):
+DEFAULT_ZOOM = 1.0
+DEFAULT_PAN = 90
+DEFAULT_TILT = 90
+
+class MultivisionClient(QWidget):
     def __init__(self):
         super().__init__()
-        self._source_ip = (os.getenv('SOURCE_IP'))
-        self._source_port = (os.getenv('RTSP_PORT'))
-        self._udp_port = (os.getenv('UDP_PORT'))
+        self._source_ip = ""
+        self._source_port = 0
+        self._cmd_port = 0
+        self._zoom_factor = DEFAULT_ZOOM
+        self._pan = DEFAULT_PAN
+        self._tilt = DEFAULT_TILT
+        # Initialize discovery client
+        self.discovery_client = UDPDiscovery(self)
+        self.discovery_client.data_received.connect(self._on_discovery_data_received)
+        self._draw_ui()
+        pixmap = QPixmap("src/video_error.jpg")
+        self.video_label.setPixmap(pixmap)
 
-        self._zoom_factor = 1.0
-        self._pan = 100
-        self._tilt = 80
-
-        # Initialize UDP Client
-        client_port = 12346
-        self.udp_client = UdpClient(self._source_ip, self._udp_port, client_port)
-        self.udp_client.data_received.connect(self._on_data_received)
+    def _draw_ui(self):
         # Layouts
         main_layout = QHBoxLayout()
         left_layout = QVBoxLayout()
@@ -96,17 +102,17 @@ class VideoStream(QWidget):
         # Set main layout
         self.setLayout(main_layout)
         # Capture RTSP stream
-        self.cap = cv2.VideoCapture(f'rtsp://{self._source_ip}:{self._source_port}/video', cv2.CAP_FFMPEG)
+        self.cap = cv2.VideoCapture()
         # Timer for frame update
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_frame)
         # Functions binding
-        play_button.clicked.connect(self.start_stream)
-        pause_button.clicked.connect(self.pause_stream)
+        #play_button.clicked.connect(self.start_stream)
+        #pause_button.clicked.connect(self.pause_stream)
         zoom_in_button.clicked.connect(self._increase_zoom)
         zoom_out_button.clicked.connect(self._decreasse_zoom)
-        self.slider.sliderReleased.connect(self._send_zoom)
-        self.slider.valueChanged.connect(self._update_zoom)
+        self.slider.sliderReleased.connect(self._update_zoom)
+        #self.slider.valueChanged.connect(self._update_zoom)
         up_button.clicked.connect(self._move_up)
         up_button.setAutoRepeat(True)
         up_button.setAutoRepeatDelay(100)
@@ -127,11 +133,32 @@ class VideoStream(QWidget):
         picture_button.clicked.connect(self._take_picture)
         video_button.clicked.connect(self._take_video)
 
-        # Start stream
-        self.start_stream()
+    def _on_discovery_data_received(self, datagram):
+        msg = json.loads(datagram.data().data())
+        adr = datagram.senderAddress().toIPv4Address()
+        if msg['device'] == 'multivision_system':
+            if adr != self._source_ip:
+                self._source_ip = adr
+                self._source_port = msg['rtsp']
+                self._cmd_port = msg['cmd']
+                self.udp_client = UdpClient(self._source_ip, self._cmd_port, 5005)
+                self.udp_client.data_received.connect(self._on_data_received)
+                self.cap.open(f'rtsp://{self._source_ip}:{self._source_port}/video', cv2.CAP_FFMPEG)
+                if self.cap.isOpened():
+                    self.start_stream()
+                    # Send out of bounds values only to trigger the ack messages
+                    self._send_zoom(0.0)
+                    self._send_angles(255, 255)
+                else:
+                    pixmap = QPixmap("src/video_error.jpg")
+                    self.video_label.setPixmap(pixmap)
 
     def _on_data_received(self, data):
-        print("Ack: ", sdata)
+        data = data.data()
+        if data[0] == 0x01:
+            self._parse_setzoom_ack(data)
+        elif data[0] == 0x02:
+            self._parse_setangles_ack(data)
 
     def start_stream(self):
         self.timer.start(16)
@@ -140,62 +167,62 @@ class VideoStream(QWidget):
         self.timer.stop()
 
     def _update_frame(self):
-        ret, frame = self.cap.read()
-        if ret:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w, ch = frame.shape
-            bytes_per_line = ch * w
-            qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            self.video_label.setPixmap(QPixmap.fromImage(qt_image))
+        if self.cap.isOpened():
+            ret, frame = self.cap.read()
+            if ret:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                h, w, ch = frame.shape
+                bytes_per_line = ch * w
+                qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                self.video_label.setPixmap(QPixmap.fromImage(qt_image))
         else:
-            time.sleep(0.5)
-            self.cap = cv2.VideoCapture(f'rtsp://{self._source_ip}:{self._source_port}/video', cv2.CAP_FFMPEG)
-            if not self.cap.isOpened():
-                pixmap = QPixmap("src/video_error.jpg")
-                self.video_label.setPixmap(pixmap)
+            pixmap = QPixmap("src/video_error.jpg")
+            self.video_label.setPixmap(pixmap)
+            self.pause_stream()
 
     def _increase_zoom(self):
         if self._zoom_factor < 5.0:
             self._zoom_factor += 0.5
             self.slider.setValue(int(self._zoom_factor*2))
-            self._update_label()
-            self._send_zoom()
+            self._update_zoom_label()
+            self._send_zoom(self._zoom_factor)
 
     def _decreasse_zoom(self):
         if self._zoom_factor > 1.0:
             self._zoom_factor -= 0.5
             self.slider.setValue(int(self._zoom_factor*2))
-            self._update_label()
-            self._send_zoom()
+            self._update_zoom_label()
+            self._send_zoom(self._zoom_factor)
 
     def _update_zoom(self):
         self._zoom_factor = self.slider.value()*0.5
-        self._update_label()
+        self._update_zoom_label()
+        self._send_zoom(self._zoom_factor)
 
     def _move_up(self):
         if self._tilt < 180:
             self._tilt += 5
-            self._send_angles()
+            self._send_angles(self._pan, self._tilt)
 
     def _move_down(self):
         if self._tilt > 0:
             self._tilt -= 5
-            self._send_angles()
+            self._send_angles(self._pan, self._tilt)
 
     def _move_left(self):
         if self._pan < 180:
             self._pan += 5
-            self._send_angles()
+            self._send_angles(self._pan, self._tilt)
 
     def _move_right(self):
         if self._pan > 0:
             self._pan -= 5
-            self._send_angles()   
+            self._send_angles(self._pan, self._tilt)   
 
     def _move_reset(self):
-        self._pan = 100
-        self._tilt = 80
-        self._send_angles()
+        self._pan = DEFAULT_PAN
+        self._tilt = DEFAULT_TILT
+        self._send_angles(self._pan, self._tilt)
 
     def _take_picture(self):
         message = Protocol.create_cameracontrol_cmd(0)
@@ -205,22 +232,32 @@ class VideoStream(QWidget):
         message = Protocol.create_cameracontrol_cmd(1)
         self.udp_client.send_message(message)
 
-    def _update_label(self):
+    def _update_zoom_label(self):
         self.zoom_label.setText(str(self._zoom_factor))
 
-    def _send_zoom(self):
-        (f, i) = math.modf(self._zoom_factor)
+    def _send_zoom(self, zoom):
+        (f, i) = math.modf(zoom)
         message = Protocol.create_setzoom_cmd(int(i), int(f*10))
         self.udp_client.send_message(message)
 
-    def _send_angles(self):
-        message = Protocol.create_setangles_cmd(self._pan, self._tilt)
+    def _send_angles(self, pan, tilt):
+        message = Protocol.create_setangles_cmd(pan, tilt)
         self.udp_client.send_message(message)
+
+    def _parse_setzoom_ack(self, data):
+        self._zoom_factor = data[1] + data[2] / 10
+        self.slider.setValue(int(self._zoom_factor*2))
+        self._update_zoom_label()
+
+    def _parse_setangles_ack(self, data):
+        self._pan = data[1]
+        self._tilt = data[2]
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setApplicationName("MultiVision Client")
-    stream = VideoStream()
+    stream = MultivisionClient()
     stream.show()
+    stream.pause_stream()
     sys.exit(app.exec_())
 
