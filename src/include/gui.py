@@ -2,6 +2,10 @@ from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QVBoxLay
 from PyQt5.QtGui import QPixmap, QIcon, QImage
 from PyQt5.QtCore import Qt, QSize, pyqtSlot
 from .logic import MultivisionBackend
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(BASE_DIR, '..', 'assets')
 
 class MultivisionClient(QWidget):
     def __init__(self):
@@ -41,19 +45,19 @@ class MultivisionClient(QWidget):
         zoom_in_button = QPushButton('+')
         zoom_out_button = QPushButton('-')
         up_button = QPushButton()
-        up_button.setIcon(QIcon('src/up_arrow.png'))
+        up_button.setIcon(QIcon(os.path.join(ASSETS_DIR, 'up_arrow.png')))
         up_button.setIconSize(QSize(24, 24))
         up_button.setFixedSize(30, 30)
         down_button = QPushButton()
-        down_button.setIcon(QIcon('src/down_arrow.png'))
+        down_button.setIcon(QIcon(os.path.join(ASSETS_DIR, 'down_arrow.png')))
         down_button.setIconSize(QSize(24, 24))
         down_button.setFixedSize(30, 30)
         left_button = QPushButton()
-        left_button.setIcon(QIcon('src/left_arrow.png'))
+        left_button.setIcon(QIcon(os.path.join(ASSETS_DIR, 'left_arrow.png')))
         left_button.setIconSize(QSize(24, 24))
         left_button.setFixedSize(30, 30)
         right_button = QPushButton()
-        right_button.setIcon(QIcon('src/right_arrow.png'))
+        right_button.setIcon(QIcon(os.path.join(ASSETS_DIR, 'right_arrow.png')))
         right_button.setIconSize(QSize(24, 24))
         right_button.setFixedSize(30, 30)
         reset_button = QPushButton('Reset')
@@ -141,5 +145,5 @@ class MultivisionClient(QWidget):
     
     @pyqtSlot()
     def _on_connection_lost(self):
-        pixmap = QPixmap("src/video_error.jpg")
+        pixmap = QPixmap(os.path.join(ASSETS_DIR, "video_error.jpg"))
         self.video_label.setPixmap(pixmap)
