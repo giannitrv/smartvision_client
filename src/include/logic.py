@@ -1,11 +1,12 @@
 import math
 import cv2
 import json
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QSize
+from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QSize, QThread
 from PyQt5.QtGui import QImage
 from include.udpclient import UdpClient
 from include.protocol import Protocol
 from include.discovery import UDPDiscovery
+from include.videoworker import VideoWorker
 
 DEFAULT_ZOOM = 1.0
 DEFAULT_PAN = 90
@@ -30,19 +31,15 @@ class MultivisionBackend(QObject):
         self.discovery_client.data_received.connect(self._on_discovery_data_received)
         
         self.udp_client = None
-        
-        # Capture RTSP stream
-        self.cap = cv2.VideoCapture()
-        
-        # Timer for frame update
-        self.timer = QTimer()
-        self.timer.timeout.connect(self._update_frame)
+        self.video_worker = None
 
     def start_stream(self):
-        self.timer.start(16)
+        if self.video_worker and not self.video_worker.isRunning():
+            self.video_worker.start()
 
     def pause_stream(self):
-        self.timer.stop()
+        if self.video_worker:
+            self.video_worker.stop()
 
     def get_current_zoom(self):
         return self._zoom_factor
@@ -50,21 +47,36 @@ class MultivisionBackend(QObject):
     def _on_discovery_data_received(self, datagram):
         msg = json.loads(datagram.data().data())
         adr = datagram.senderAddress().toIPv4Address()
-        if msg['device'] == 'multivision_system':
-            if adr != self._source_ip:
-                self._source_ip = adr
-                self._source_port = msg['rtsp']
-                self._cmd_port = msg['cmd']
-                self.udp_client = UdpClient(self._source_ip, self._cmd_port, 5005)
-                self.udp_client.data_received.connect(self._on_data_received)
-                self.cap.open(f'rtsp://{self._source_ip}:{self._source_port}/video', cv2.CAP_FFMPEG)
-                if self.cap.isOpened():
-                    self.start_stream()
-                    # Send out of bounds values only to trigger the ack messages
-                    self._send_zoom(0.0)
-                    self._send_angles(255, 255)
-                else:
-                    self.connection_lost.emit()
+        
+        # Robustness check: update if IP changed OR ports changed
+        config_changed = (adr != self._source_ip) or \
+                         (msg['rtsp'] != self._source_port) or \
+                         (msg['cmd'] != self._cmd_port)
+                         
+        if msg['device'] == 'multivision_system' and config_changed:
+            self._source_ip = adr
+            self._source_port = msg['rtsp']
+            self._cmd_port = msg['cmd']
+            
+            # Setup UDP Client
+            self.udp_client = UdpClient(self._source_ip, self._cmd_port, 5005)
+            self.udp_client.data_received.connect(self._on_data_received)
+            
+            # Cleanup old worker if exists
+            if self.video_worker:
+                self.video_worker.stop()
+                self.video_worker.deleteLater()
+            
+            # Start new video worker
+            url = f'rtsp://{self._source_ip}:{self._source_port}/video'
+            self.video_worker = VideoWorker(url)
+            self.video_worker.frame_ready.connect(self.frame_ready)
+            self.video_worker.connection_lost.connect(self.connection_lost)
+            self.video_worker.start()
+
+            # Send out of bounds values only to trigger the ack messages
+            self._send_zoom(0.0)
+            self._send_angles(255, 255)
 
     def _on_data_received(self, data):
         data = data.data()
@@ -72,19 +84,6 @@ class MultivisionBackend(QObject):
             self._parse_setzoom_ack(data)
         elif data[0] == 0x02:
             self._parse_setangles_ack(data)
-
-    def _update_frame(self):
-        if self.cap.isOpened():
-            ret, frame = self.cap.read()
-            if ret:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                h, w, ch = frame.shape
-                bytes_per_line = ch * w
-                qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-                self.frame_ready.emit(qt_image)
-        else:
-            self.connection_lost.emit()
-            self.pause_stream()
 
     def increase_zoom(self):
         if self._zoom_factor < 5.0:
@@ -101,8 +100,6 @@ class MultivisionBackend(QObject):
     def set_zoom(self, value):
         # Assuming value comes from slider (int), need to convert back if logic requires float, 
         # or if the UI passes the raw slider value.
-        # Looking at original main.py:
-        # self._zoom_factor = self.slider.value()*0.5
         new_zoom = value * 0.5
         if abs(new_zoom - self._zoom_factor) > 0.01: # simple debounce/check
             self._zoom_factor = new_zoom
