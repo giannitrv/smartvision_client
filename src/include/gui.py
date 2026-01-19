@@ -1,11 +1,35 @@
-from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGroupBox
-from PyQt5.QtGui import QPixmap, QIcon, QImage
-from PyQt5.QtCore import Qt, QSize, pyqtSlot
+from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGroupBox, QRubberBand
+from PyQt5.QtGui import QPixmap, QIcon, QImage, QPainter, QColor
+from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal, QPoint, QRect
 from .logic import MultivisionBackend
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(BASE_DIR, '..', 'assets')
+
+class SelectionLabel(QLabel):
+    area_selected = pyqtSignal(int, int, int, int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
+        self.origin = QPoint()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.origin = event.pos()
+            self.rubberBand.setGeometry(QRect(self.origin, QSize()))
+            self.rubberBand.show()
+
+    def mouseMoveEvent(self, event):
+        if not self.origin.isNull():
+            self.rubberBand.setGeometry(QRect(self.origin, event.pos()).normalized())
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.rubberBand.hide()
+            rect = self.rubberBand.geometry()
+            self.area_selected.emit(rect.x(), rect.y(), rect.width(), rect.height())
 
 class MultivisionClient(QWidget):
     def __init__(self):
@@ -30,7 +54,8 @@ class MultivisionClient(QWidget):
         move_layout = QGridLayout()
         control_layout = QVBoxLayout()
         # Widgets
-        self.video_label = QLabel()
+        self.video_label = SelectionLabel()
+        self.video_label.area_selected.connect(self._on_area_selected)
         self.slider = QSlider(Qt.Vertical)
         self.slider.setMinimum(2)
         self.slider.setMaximum(10)
@@ -147,3 +172,7 @@ class MultivisionClient(QWidget):
     def _on_connection_lost(self):
         pixmap = QPixmap(os.path.join(ASSETS_DIR, "video_error.jpg"))
         self.video_label.setPixmap(pixmap)
+
+    @pyqtSlot(int, int, int, int)
+    def _on_area_selected(self, x, y, w, h):
+        self.backend.send_selection_area(x, y, w, h, self.video_label.width(), self.video_label.height())

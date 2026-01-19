@@ -81,9 +81,9 @@ class MultivisionBackend(QObject):
     def _on_data_received(self, data):
         data = data.data()
         if data[0] == 0x01:
-            self._parse_setzoom_ack(data)
+            self._parse_set_zoom_ack(data)
         elif data[0] == 0x02:
-            self._parse_setangles_ack(data)
+            self._parse_set_angles_ack(data)
 
     def increase_zoom(self):
         if self._zoom_factor < 5.0:
@@ -98,8 +98,6 @@ class MultivisionBackend(QObject):
             self._send_zoom(self._zoom_factor)
 
     def set_zoom(self, value):
-        # Assuming value comes from slider (int), need to convert back if logic requires float, 
-        # or if the UI passes the raw slider value.
         new_zoom = value * 0.5
         if abs(new_zoom - self._zoom_factor) > 0.01: # simple debounce/check
             self._zoom_factor = new_zoom
@@ -107,13 +105,13 @@ class MultivisionBackend(QObject):
             self._send_zoom(self._zoom_factor)
 
     def move_up(self):
-        if self._tilt < 180:
-            self._tilt += 5
+        if self._tilt > 0:
+            self._tilt -= 5
             self._send_angles(self._pan, self._tilt)
 
     def move_down(self):
-        if self._tilt > 0:
-            self._tilt -= 5
+        if self._tilt < 180:
+            self._tilt += 5
             self._send_angles(self._pan, self._tilt)
 
     def move_left(self):
@@ -133,29 +131,46 @@ class MultivisionBackend(QObject):
 
     def take_picture(self):
         if self.udp_client:
-            message = Protocol.create_cameracontrol_cmd(0)
+            message = Protocol.create_camera_control_cmd(0)
             self.udp_client.send_message(message)
 
     def take_video(self):
         if self.udp_client:
-            message = Protocol.create_cameracontrol_cmd(1)
+            message = Protocol.create_camera_control_cmd(1)
             self.udp_client.send_message(message)
 
     def _send_zoom(self, zoom):
         (f, i) = math.modf(zoom)
         if self.udp_client:
-            message = Protocol.create_setzoom_cmd(int(i), int(f*10))
+            message = Protocol.create_set_zoom_cmd(int(i), int(f*10))
             self.udp_client.send_message(message)
 
     def _send_angles(self, pan, tilt):
         if self.udp_client:
-            message = Protocol.create_setangles_cmd(pan, tilt)
+            message = Protocol.create_set_angles_cmd(pan, tilt)
             self.udp_client.send_message(message)
 
-    def _parse_setzoom_ack(self, data):
+    def _parse_set_zoom_ack(self, data):
         self._zoom_factor = data[1] + data[2] / 10
         self.zoom_changed.emit(self._zoom_factor)
 
-    def _parse_setangles_ack(self, data):
+    def _parse_set_angles_ack(self, data):
         self._pan = data[1]
         self._tilt = data[2]
+
+    def send_selection_area(self, x, y, w, h, frame_width, frame_height):
+        print(f"Creating select area command: {x}, {y}, {w}, {h}")
+        if self.udp_client and frame_width > 0 and frame_height > 0:
+            # Normalize to 0-255
+            norm_x = int((x / frame_width) * 255)
+            norm_y = int((y / frame_height) * 255)
+            norm_w = int((w / frame_width) * 255)
+            norm_h = int((h / frame_height) * 255)
+            # Ensure values are within byte range
+            norm_x = max(0, min(255, norm_x))
+            norm_y = max(0, min(255, norm_y))
+            norm_w = max(0, min(255, norm_w))
+            norm_h = max(0, min(255, norm_h))
+
+            message = Protocol.create_select_area_cmd(norm_x, norm_y, norm_w, norm_h)
+            self.udp_client.send_message(message)
