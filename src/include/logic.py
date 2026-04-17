@@ -105,24 +105,20 @@ class MultivisionBackend(QObject):
             self._send_zoom(self._zoom_factor)
 
     def move_up(self):
-        if self._tilt > 0:
-            self._tilt -= 5
-            self._send_angles(self._pan, self._tilt)
+        self._tilt = 43
+        self._send_angles(self._pan, self._tilt)
 
     def move_down(self):
-        if self._tilt < 180:
-            self._tilt += 5
-            self._send_angles(self._pan, self._tilt)
+        self._tilt = 45
+        self._send_angles(self._pan, self._tilt)
 
     def move_left(self):
-        if self._pan < 180:
-            self._pan += 5
-            self._send_angles(self._pan, self._tilt)
+        self._pan = 43
+        self._send_angles(self._pan, self._tilt)
 
     def move_right(self):
-        if self._pan > 0:
-            self._pan -= 5
-            self._send_angles(self._pan, self._tilt)
+        self._pan = 45
+        self._send_angles(self._pan, self._tilt)
 
     def move_reset(self):
         self._pan = DEFAULT_PAN
