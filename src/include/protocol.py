@@ -20,12 +20,12 @@ class Protocol():
         return message
 
     @staticmethod
-    def create_set_angles_cmd(pan, tilt):
+    def create_set_angles_cmd(pan, tilt, reset):
         message = bytearray()
         message.extend(Commands.SET_GIMBAL_ANGLE_CMD_ID.value.to_bytes(1, 'little'))
         message.extend(pan.to_bytes(1, 'little'))
         message.extend(tilt.to_bytes(1, 'little'))
-        message.extend(0x00.to_bytes(1, 'little'))
+        message.extend(reset.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
         return message
 

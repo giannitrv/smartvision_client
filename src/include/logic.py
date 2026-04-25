@@ -1,5 +1,4 @@
 import math
-import cv2
 import json
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QSize, QThread
 from PyQt5.QtGui import QImage
@@ -121,9 +120,7 @@ class MultivisionBackend(QObject):
         self._send_angles(self._pan, self._tilt)
 
     def move_reset(self):
-        self._pan = DEFAULT_PAN
-        self._tilt = DEFAULT_TILT
-        self._send_angles(self._pan, self._tilt)
+        self._send_angles(self._pan, self._tilt, 1)
 
     def take_picture(self):
         if self.udp_client:
@@ -141,9 +138,9 @@ class MultivisionBackend(QObject):
             message = Protocol.create_set_zoom_cmd(int(i), int(f*10))
             self.udp_client.send_message(message)
 
-    def _send_angles(self, pan, tilt):
+    def _send_angles(self, pan, tilt, reset=0):
         if self.udp_client:
-            message = Protocol.create_set_angles_cmd(pan, tilt)
+            message = Protocol.create_set_angles_cmd(pan, tilt, reset)
             self.udp_client.send_message(message)
 
     def _parse_set_zoom_ack(self, data):

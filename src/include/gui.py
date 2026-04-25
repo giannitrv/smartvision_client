@@ -18,6 +18,11 @@ class SelectionLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.origin = event.pos()
+            self.area_selected.emit(self.origin.x(), self.origin.y(), 0, 0)
+"""
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.origin = event.pos()
             self.rubberBand.setGeometry(QRect(self.origin, QSize()))
             self.rubberBand.show()
 
@@ -30,7 +35,7 @@ class SelectionLabel(QLabel):
             self.rubberBand.hide()
             rect = self.rubberBand.geometry()
             self.area_selected.emit(rect.x(), rect.y(), rect.width(), rect.height())
-
+"""
 class MultivisionClient(QWidget):
     def __init__(self):
         super().__init__()
