@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGroupBox, QRubberBand
+from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QCheckBox, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGroupBox, QRubberBand
 from PyQt5.QtGui import QPixmap, QIcon, QImage, QPainter, QColor
 from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal, QPoint, QRect
 from .logic import MultivisionBackend
@@ -57,6 +57,7 @@ class MultivisionClient(QWidget):
         right_layout = QVBoxLayout()
         zoom_layout = QVBoxLayout()
         move_layout = QGridLayout()
+        ai_layout = QVBoxLayout()
         control_layout = QVBoxLayout()
         # Widgets
         self.video_label = SelectionLabel()
@@ -91,10 +92,12 @@ class MultivisionClient(QWidget):
         right_button.setIconSize(QSize(24, 24))
         right_button.setFixedSize(30, 30)
         reset_button = QPushButton('Reset')
+        track_zoom_checkbox = QCheckBox("Track Zoom")
         picture_button = QPushButton("Picture")
         video_button = QPushButton("Video")
         zoom_gb = QGroupBox("Zoom")
         move_gb = QGroupBox("Move")
+        ai_gb = QGroupBox("AI")
         control_gb = QGroupBox("Control")
         # Add widget to layout
         left_layout.addWidget(play_button)
@@ -116,6 +119,9 @@ class MultivisionClient(QWidget):
         move_layout.addWidget(left_button, 1, 0)
         move_layout.addWidget(right_button, 1, 2)
         move_layout.addWidget(reset_button, 3, 0, 1, 3)
+        right_layout.addWidget(ai_gb)
+        ai_gb.setLayout(ai_layout)
+        ai_layout.addWidget(track_zoom_checkbox)
         right_layout.addWidget(control_gb)
         control_gb.setLayout(control_layout)
         control_layout.addWidget(picture_button)
@@ -156,6 +162,9 @@ class MultivisionClient(QWidget):
         right_button.setAutoRepeatInterval(200)
         
         reset_button.clicked.connect(self.backend.move_reset)
+        
+        track_zoom_checkbox.stateChanged.connect(self.backend.set_auto_zoom)
+        
         picture_button.clicked.connect(self.backend.take_picture)
         video_button.clicked.connect(self.backend.take_video)
 
@@ -168,7 +177,7 @@ class MultivisionClient(QWidget):
 
     @pyqtSlot(float)
     def _on_zoom_changed(self, zoom):
-        self.zoom_label.setText(str(zoom))
+        self.zoom_label.setText(f"{zoom:.1f}x")
         self.slider.blockSignals(True)
         self.slider.setValue(int(zoom * 2))
         self.slider.blockSignals(False)

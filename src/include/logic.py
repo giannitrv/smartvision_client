@@ -78,22 +78,20 @@ class MultivisionBackend(QObject):
             self._send_angles(255, 255)
 
     def _on_data_received(self, data):
-        data = data.data()
-        if data[0] == 0x01:
-            self._parse_set_zoom_ack(data)
-        elif data[0] == 0x02:
-            self._parse_set_angles_ack(data)
+        msg = json.loads(data.data())
+        self._zoom_factor = msg['zoom']
+        self._pan = msg['pan']
+        self._tilt = msg['tilt']
+        self.zoom_changed.emit(self._zoom_factor)
 
     def increase_zoom(self):
         if self._zoom_factor < 5.0:
             self._zoom_factor += 0.5
-            self.zoom_changed.emit(self._zoom_factor)
             self._send_zoom(self._zoom_factor)
 
     def decrease_zoom(self):
         if self._zoom_factor > 1.0:
             self._zoom_factor -= 0.5
-            self.zoom_changed.emit(self._zoom_factor)
             self._send_zoom(self._zoom_factor)
 
     def set_zoom(self, value):
@@ -121,6 +119,11 @@ class MultivisionBackend(QObject):
 
     def move_reset(self):
         self._send_angles(self._pan, self._tilt, 1)
+
+    def set_auto_zoom(self, autoZoom):
+        if self.udp_client:
+            message = Protocol.create_tracking_mode_cmd(autoZoom)
+            self.udp_client.send_message(message)
 
     def take_picture(self):
         if self.udp_client:
@@ -165,5 +168,5 @@ class MultivisionBackend(QObject):
             norm_w = max(0, min(255, norm_w))
             norm_h = max(0, min(255, norm_h))
 
-            message = Protocol.create_select_area_cmd(norm_x, norm_y, norm_w, norm_h)
+            message = Protocol.create_target_tracking_cmd(norm_x, norm_y, norm_w, norm_h)
             self.udp_client.send_message(message)

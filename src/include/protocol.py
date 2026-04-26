@@ -5,7 +5,8 @@ class Commands(Enum):
     SET_GIMBAL_ANGLE_CMD_ID = 0x02
     CAMERA_CONTROL_CMD_ID   = 0x03
     SET_IMAGE_TYPE_CMD_ID   = 0x04
-    SELECT_AREA_CMD_ID      = 0x05
+    TARGET_TRACKING_CMD_ID  = 0x05
+    TRACKING_MODE_CMD_ID    = 0x06
 
 class Protocol():
 
@@ -50,11 +51,21 @@ class Protocol():
         return message
 
     @staticmethod
-    def create_select_area_cmd(x, y, w, h):
+    def create_target_tracking_cmd(x, y, w, h):
         message = bytearray()
-        message.extend(Commands.SELECT_AREA_CMD_ID.value.to_bytes(1, 'little'))
+        message.extend(Commands.TARGET_TRACKING_CMD_ID.value.to_bytes(1, 'little'))
         message.extend(x.to_bytes(1, 'little'))
         message.extend(y.to_bytes(1, 'little'))
         message.extend(w.to_bytes(1, 'little'))
         message.extend(h.to_bytes(1, 'little'))
+        return message
+
+    @staticmethod
+    def create_tracking_mode_cmd(autoZoom):
+        message = bytearray()
+        message.extend(Commands.TRACKING_MODE_CMD_ID.value.to_bytes(1, 'little'))
+        message.extend(autoZoom.to_bytes(1, 'little'))
+        message.extend(0x00.to_bytes(1, 'little'))
+        message.extend(0x00.to_bytes(1, 'little'))
+        message.extend(0x00.to_bytes(1, 'little'))
         return message
