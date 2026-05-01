@@ -24,6 +24,8 @@ class MultivisionBackend(QObject):
         self._zoom_factor = DEFAULT_ZOOM
         self._pan = DEFAULT_PAN
         self._tilt = DEFAULT_TILT
+        self._camera_control = 0
+        self._enable_osd = False
         
         # Initialize discovery client
         self.discovery_client = UDPDiscovery(self)
@@ -52,14 +54,18 @@ class MultivisionBackend(QObject):
                          (msg['rtsp'] != self._source_port) or \
                          (msg['cmd'] != self._cmd_port)
                          
-        if msg['device'] == 'multivision_system' and config_changed:
+        # Recreate worker if it has stopped (e.g., connection was lost)
+        worker_dead = self.video_worker is None or not self.video_worker.isRunning()
+                         
+        if msg['device'] == 'multivision_system' and (config_changed or worker_dead):
             self._source_ip = adr
             self._source_port = msg['rtsp']
             self._cmd_port = msg['cmd']
             
-            # Setup UDP Client
-            self.udp_client = UdpClient(self._source_ip, self._cmd_port, 5005)
-            self.udp_client.data_received.connect(self._on_data_received)
+            # Setup UDP Client only if configuration changed or it doesn't exist
+            if config_changed or self.udp_client is None:
+                self.udp_client = UdpClient(self._source_ip, self._cmd_port, 5005)
+                self.udp_client.data_received.connect(self._on_data_received)
             
             # Cleanup old worker if exists
             if self.video_worker:
@@ -127,12 +133,20 @@ class MultivisionBackend(QObject):
 
     def take_picture(self):
         if self.udp_client:
-            message = Protocol.create_camera_control_cmd(0)
+            self._camera_control = 0
+            message = Protocol.create_camera_control_cmd(self._camera_control, self._enable_osd)
             self.udp_client.send_message(message)
 
     def take_video(self):
         if self.udp_client:
-            message = Protocol.create_camera_control_cmd(1)
+            self._camera_control = 1
+            message = Protocol.create_camera_control_cmd(self._camera_control, self._enable_osd)
+            self.udp_client.send_message(message)
+
+    def set_enable_osd(self, enable_osd):
+        if self.udp_client:
+            self._enable_osd = enable_osd
+            message = Protocol.create_camera_control_cmd(self._camera_control, self._enable_osd)
             self.udp_client.send_message(message)
 
     def _send_zoom(self, zoom):

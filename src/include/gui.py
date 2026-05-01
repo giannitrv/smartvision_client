@@ -95,6 +95,7 @@ class MultivisionClient(QWidget):
         track_zoom_checkbox = QCheckBox("Track Zoom")
         picture_button = QPushButton("Picture")
         video_button = QPushButton("Video")
+        osd_checkbox = QCheckBox("Enable OSD")
         zoom_gb = QGroupBox("Zoom")
         move_gb = QGroupBox("Move")
         ai_gb = QGroupBox("AI")
@@ -126,6 +127,7 @@ class MultivisionClient(QWidget):
         control_gb.setLayout(control_layout)
         control_layout.addWidget(picture_button)
         control_layout.addWidget(video_button)
+        control_layout.addWidget(osd_checkbox)
         right_layout.addStretch()
 
         main_layout.addLayout(left_layout)
@@ -167,6 +169,7 @@ class MultivisionClient(QWidget):
         
         picture_button.clicked.connect(self.backend.take_picture)
         video_button.clicked.connect(self.backend.take_video)
+        osd_checkbox.stateChanged.connect(self.backend.set_enable_osd)
 
     def _update_zoom_from_slider(self):
         self.backend.set_zoom(self.slider.value())

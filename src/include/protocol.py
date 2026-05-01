@@ -18,6 +18,7 @@ class Protocol():
         message.extend(decimal.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
+
         return message
 
     @staticmethod
@@ -28,18 +29,20 @@ class Protocol():
         message.extend(tilt.to_bytes(1, 'little'))
         message.extend(reset.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
+
         return message
 
     @staticmethod
-    def create_camera_control_cmd(control):
+    def create_camera_control_cmd(control, enable_osd):
         message = bytearray()
         message.extend(Commands.CAMERA_CONTROL_CMD_ID.value.to_bytes(1, 'little'))
         message.extend(control.to_bytes(1, 'little'))
+        message.extend(enable_osd.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
-        message.extend(0x00.to_bytes(1, 'little'))
+
         return message
-    
+
     @staticmethod
     def create_set_image_type_cmd(image_type):
         message = bytearray()
@@ -48,6 +51,7 @@ class Protocol():
         message.extend(0x00.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
+
         return message
 
     @staticmethod
@@ -58,6 +62,7 @@ class Protocol():
         message.extend(y.to_bytes(1, 'little'))
         message.extend(w.to_bytes(1, 'little'))
         message.extend(h.to_bytes(1, 'little'))
+
         return message
 
     @staticmethod
@@ -68,4 +73,5 @@ class Protocol():
         message.extend(0x00.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
+
         return message
