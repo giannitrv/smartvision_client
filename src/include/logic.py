@@ -14,6 +14,8 @@ DEFAULT_TILT = 90
 class MultivisionBackend(QObject):
     frame_ready = pyqtSignal(QImage)
     zoom_changed = pyqtSignal(float)
+    auto_zoom_changed = pyqtSignal(bool)
+    osd_enabled_changed = pyqtSignal(bool)
     connection_lost = pyqtSignal()
     
     def __init__(self):
@@ -24,7 +26,7 @@ class MultivisionBackend(QObject):
         self._zoom_factor = DEFAULT_ZOOM
         self._pan = DEFAULT_PAN
         self._tilt = DEFAULT_TILT
-        self._camera_control = 0
+        self._auto_zoom = False
         self._enable_osd = False
         
         # Initialize discovery client
@@ -88,7 +90,11 @@ class MultivisionBackend(QObject):
         self._zoom_factor = msg['zoom']
         self._pan = msg['pan']
         self._tilt = msg['tilt']
+        self._auto_zoom = msg['autoZoom']
+        self._osd_enabled = msg['osdEnabled']
         self.zoom_changed.emit(self._zoom_factor)
+        self.auto_zoom_changed.emit(self._auto_zoom)
+        self.osd_enabled_changed.emit(self._osd_enabled)
 
     def increase_zoom(self):
         if self._zoom_factor < 5.0:
@@ -133,20 +139,18 @@ class MultivisionBackend(QObject):
 
     def take_picture(self):
         if self.udp_client:
-            self._camera_control = 0
-            message = Protocol.create_camera_control_cmd(self._camera_control, self._enable_osd)
+            message = Protocol.create_camera_control_cmd(1, self._enable_osd)
             self.udp_client.send_message(message)
 
     def take_video(self):
         if self.udp_client:
-            self._camera_control = 1
-            message = Protocol.create_camera_control_cmd(self._camera_control, self._enable_osd)
+            message = Protocol.create_camera_control_cmd(2, self._enable_osd)
             self.udp_client.send_message(message)
 
     def set_enable_osd(self, enable_osd):
         if self.udp_client:
             self._enable_osd = enable_osd
-            message = Protocol.create_camera_control_cmd(self._camera_control, self._enable_osd)
+            message = Protocol.create_camera_control_cmd(0, self._enable_osd)
             self.udp_client.send_message(message)
 
     def _send_zoom(self, zoom):

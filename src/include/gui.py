@@ -45,6 +45,8 @@ class MultivisionClient(QWidget):
         # Connect backend signals
         self.backend.frame_ready.connect(self._on_frame_ready)
         self.backend.zoom_changed.connect(self._on_zoom_changed)
+        self.backend.auto_zoom_changed.connect(self._on_auto_zoom_changed)
+        self.backend.osd_enabled_changed.connect(self._on_osd_enabled_changed)
         self.backend.connection_lost.connect(self._on_connection_lost)
         
         # Initial state
@@ -66,6 +68,8 @@ class MultivisionClient(QWidget):
         self.slider.setMinimum(2)
         self.slider.setMaximum(10)
         self.slider.setSingleStep(1)
+        self.track_zoom_checkbox = QCheckBox("Track Zoom")
+        self.osd_checkbox = QCheckBox("Enable OSD")
         play_button = QPushButton('Play')
         pause_button = QPushButton('Pause')
         
@@ -92,10 +96,8 @@ class MultivisionClient(QWidget):
         right_button.setIconSize(QSize(24, 24))
         right_button.setFixedSize(30, 30)
         reset_button = QPushButton('Reset')
-        track_zoom_checkbox = QCheckBox("Track Zoom")
         picture_button = QPushButton("Picture")
         video_button = QPushButton("Video")
-        osd_checkbox = QCheckBox("Enable OSD")
         zoom_gb = QGroupBox("Zoom")
         move_gb = QGroupBox("Move")
         ai_gb = QGroupBox("AI")
@@ -122,12 +124,12 @@ class MultivisionClient(QWidget):
         move_layout.addWidget(reset_button, 3, 0, 1, 3)
         right_layout.addWidget(ai_gb)
         ai_gb.setLayout(ai_layout)
-        ai_layout.addWidget(track_zoom_checkbox)
+        ai_layout.addWidget(self.track_zoom_checkbox)
         right_layout.addWidget(control_gb)
         control_gb.setLayout(control_layout)
         control_layout.addWidget(picture_button)
         control_layout.addWidget(video_button)
-        control_layout.addWidget(osd_checkbox)
+        control_layout.addWidget(self.osd_checkbox)
         right_layout.addStretch()
 
         main_layout.addLayout(left_layout)
@@ -165,11 +167,11 @@ class MultivisionClient(QWidget):
         
         reset_button.clicked.connect(self.backend.move_reset)
         
-        track_zoom_checkbox.stateChanged.connect(self.backend.set_auto_zoom)
+        self.track_zoom_checkbox.stateChanged.connect(self.backend.set_auto_zoom)
         
         picture_button.clicked.connect(self.backend.take_picture)
         video_button.clicked.connect(self.backend.take_video)
-        osd_checkbox.stateChanged.connect(self.backend.set_enable_osd)
+        self.osd_checkbox.stateChanged.connect(self.backend.set_enable_osd)
 
     def _update_zoom_from_slider(self):
         self.backend.set_zoom(self.slider.value())
@@ -184,7 +186,15 @@ class MultivisionClient(QWidget):
         self.slider.blockSignals(True)
         self.slider.setValue(int(zoom * 2))
         self.slider.blockSignals(False)
-    
+
+    @pyqtSlot(bool)
+    def _on_auto_zoom_changed(self, auto_zoom):
+        self.track_zoom_checkbox.setChecked(auto_zoom)
+
+    @pyqtSlot(bool)
+    def _on_osd_enabled_changed(self, enabled):
+        self.osd_checkbox.setChecked(enabled)
+
     @pyqtSlot()
     def _on_connection_lost(self):
         pixmap = QPixmap(os.path.join(ASSETS_DIR, "video_error.jpg"))
