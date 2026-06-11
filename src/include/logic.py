@@ -1,6 +1,7 @@
 import math
 import json
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QSize, QThread
+import ipaddress
+from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QImage
 from include.udpclient import UdpClient
 from include.protocol import Protocol
@@ -20,7 +21,7 @@ class MultivisionBackend(QObject):
     
     def __init__(self):
         super().__init__()
-        self._source_ip = ""
+        self._source_ip = 0
         self._source_port = 0
         self._cmd_port = 0
         self._zoom_factor = DEFAULT_ZOOM
@@ -49,7 +50,7 @@ class MultivisionBackend(QObject):
         
     def _on_discovery_data_received(self, datagram):
         msg = json.loads(datagram.data().data())
-        adr = datagram.senderAddress().toIPv4Address()
+        adr = int(ipaddress.IPv4Address(msg['ip']))
         
         # Robustness check: update if IP changed OR ports changed
         config_changed = (adr != self._source_ip) or \
@@ -75,7 +76,7 @@ class MultivisionBackend(QObject):
                 self.video_worker.deleteLater()
             
             # Start new video worker
-            url = f'rtsp://{self._source_ip}:{self._source_port}/video'
+            url = f'rtsp://{msg["ip"]}:{self._source_port}/video'
             self.video_worker = VideoWorker(url)
             self.video_worker.frame_ready.connect(self.frame_ready)
             self.video_worker.connection_lost.connect(self.connection_lost)
