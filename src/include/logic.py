@@ -18,7 +18,7 @@ class MultivisionBackend(QObject):
     auto_zoom_changed = pyqtSignal(bool)
     osd_enabled_changed = pyqtSignal(bool)
     connection_lost = pyqtSignal()
-    
+
     def __init__(self):
         super().__init__()
         self._source_ip = 0
@@ -29,11 +29,10 @@ class MultivisionBackend(QObject):
         self._tilt = DEFAULT_TILT
         self._auto_zoom = False
         self._enable_osd = False
-        
         # Initialize discovery client
         self.discovery_client = UDPDiscovery(self)
         self.discovery_client.data_received.connect(self._on_discovery_data_received)
-        
+
         self.udp_client = None
         self.video_worker = None
 
@@ -47,44 +46,35 @@ class MultivisionBackend(QObject):
 
     def get_current_zoom(self):
         return self._zoom_factor
-        
+
     def _on_discovery_data_received(self, datagram):
         msg = json.loads(datagram.data().data())
         adr = int(ipaddress.IPv4Address(msg['ip']))
-        
-        # Robustness check: update if IP changed OR ports changed
+        # Update if IP changed OR ports changed
         config_changed = (adr != self._source_ip) or \
                          (msg['rtsp'] != self._source_port) or \
                          (msg['cmd'] != self._cmd_port)
-                         
-        # Recreate worker if it has stopped (e.g., connection was lost)
+        # Recreate worker if it has stopped
         worker_dead = self.video_worker is None or not self.video_worker.isRunning()
-                         
         if msg['device'] == 'multivision_system' and (config_changed or worker_dead):
+            print("Probing new configuration")
             self._source_ip = adr
             self._source_port = msg['rtsp']
             self._cmd_port = msg['cmd']
-            
             # Setup UDP Client only if configuration changed or it doesn't exist
             if config_changed or self.udp_client is None:
                 self.udp_client = UdpClient(self._source_ip, self._cmd_port, 5005)
                 self.udp_client.data_received.connect(self._on_data_received)
-            
             # Cleanup old worker if exists
             if self.video_worker:
                 self.video_worker.stop()
                 self.video_worker.deleteLater()
-            
             # Start new video worker
             url = f'rtsp://{msg["ip"]}:{self._source_port}/video'
             self.video_worker = VideoWorker(url)
             self.video_worker.frame_ready.connect(self.frame_ready)
             self.video_worker.connection_lost.connect(self.connection_lost)
             self.video_worker.start()
-
-            # Send out of bounds values only to trigger the ack messages
-            self._send_zoom(0.0)
-            self._send_angles(255, 255)
 
     def _on_data_received(self, data):
         msg = json.loads(data.data())

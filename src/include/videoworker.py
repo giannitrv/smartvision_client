@@ -18,7 +18,7 @@ class VideoWorker(QThread):
             self.connection_lost.emit()
             self.running = False
             return
-            
+
         while self.running:
             ret, frame = cap.read()
             if ret:
