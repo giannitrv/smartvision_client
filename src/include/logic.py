@@ -50,21 +50,14 @@ class MultivisionBackend(QObject):
     def _on_discovery_data_received(self, datagram):
         msg = json.loads(datagram.data().data())
         adr = int(ipaddress.IPv4Address(msg['ip']))
-        # Update if IP changed OR ports changed
-        config_changed = (adr != self._source_ip) or \
-                         (msg['rtsp'] != self._source_port) or \
-                         (msg['cmd'] != self._cmd_port)
+        # Update if IP changed
+        config_changed = (adr != self._source_ip)
         # Recreate worker if it has stopped
         worker_dead = self.video_worker is None or not self.video_worker.isRunning()
         if msg['device'] == 'multivision_system' and (config_changed or worker_dead):
-            print("Probing new configuration")
             self._source_ip = adr
             self._source_port = msg['rtsp']
             self._cmd_port = msg['cmd']
-            # Setup UDP Client only if configuration changed or it doesn't exist
-            if config_changed or self.udp_client is None:
-                self.udp_client = UdpClient(self._source_ip, self._cmd_port, 5005)
-                self.udp_client.data_received.connect(self._on_data_received)
             # Cleanup old worker if exists
             if self.video_worker:
                 self.video_worker.stop()
@@ -74,6 +67,7 @@ class MultivisionBackend(QObject):
             self.video_worker = VideoWorker(url)
             self.video_worker.frame_ready.connect(self.frame_ready)
             self.video_worker.connection_lost.connect(self.connection_lost)
+            self.video_worker.stream_opened.connect(self._on_stream_opened)
             self.video_worker.start()
 
     def _on_data_received(self, data):
@@ -86,6 +80,16 @@ class MultivisionBackend(QObject):
         self.zoom_changed.emit(self._zoom_factor)
         self.auto_zoom_changed.emit(self._auto_zoom)
         self.osd_enabled_changed.emit(self._osd_enabled)
+
+    def _on_stream_opened(self):
+        # Setup UDP Client only if it doesn't exist
+        if self.udp_client is not None:
+            self.udp_client.deleteLater()
+            self.udp_client = None
+        # Create a new UDP client
+        if self.udp_client is None:
+            self.udp_client = UdpClient(self._source_ip, self._cmd_port, 5005)
+            self.udp_client.data_received.connect(self._on_data_received)
 
     def increase_zoom(self):
         if self._zoom_factor < 5.0:
@@ -124,34 +128,34 @@ class MultivisionBackend(QObject):
         self._send_angles(self._pan, self._tilt, 1)
 
     def set_auto_zoom(self, autoZoom):
-        if self.udp_client:
+        if self.udp_client.is_ready():
             message = Protocol.create_tracking_mode_cmd(autoZoom)
             self.udp_client.send_message(message)
 
     def take_picture(self):
-        if self.udp_client:
+        if self.udp_client.is_ready():
             message = Protocol.create_camera_control_cmd(1, self._enable_osd)
             self.udp_client.send_message(message)
 
     def take_video(self):
-        if self.udp_client:
+        if self.udp_client.is_ready():
             message = Protocol.create_camera_control_cmd(2, self._enable_osd)
             self.udp_client.send_message(message)
 
     def set_enable_osd(self, enable_osd):
-        if self.udp_client:
+        if self.udp_client.is_ready():
             self._enable_osd = enable_osd
             message = Protocol.create_camera_control_cmd(0, self._enable_osd)
             self.udp_client.send_message(message)
 
     def _send_zoom(self, zoom):
         (f, i) = math.modf(zoom)
-        if self.udp_client:
+        if self.udp_client.is_ready():
             message = Protocol.create_set_zoom_cmd(int(i), int(f*10))
             self.udp_client.send_message(message)
 
     def _send_angles(self, pan, tilt, reset=0):
-        if self.udp_client:
+        if self.udp_client.is_ready():
             message = Protocol.create_set_angles_cmd(pan, tilt, reset)
             self.udp_client.send_message(message)
 
@@ -164,8 +168,7 @@ class MultivisionBackend(QObject):
         self._tilt = data[2]
 
     def send_selection_area(self, x, y, w, h, frame_width, frame_height):
-        print(f"Creating select area command: {x}, {y}, {w}, {h}")
-        if self.udp_client and frame_width > 0 and frame_height > 0:
+        if self.udp_client.is_ready() and frame_width > 0 and frame_height > 0:
             # Normalize to 0-255
             norm_x = int((x / frame_width) * 255)
             norm_y = int((y / frame_height) * 255)

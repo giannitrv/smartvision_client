@@ -3,6 +3,7 @@ from PyQt5.QtGui import QImage
 import cv2
 
 class VideoWorker(QThread):
+    stream_opened = pyqtSignal()
     frame_ready = pyqtSignal(QImage)
     connection_lost = pyqtSignal()
 
@@ -18,10 +19,13 @@ class VideoWorker(QThread):
             self.connection_lost.emit()
             self.running = False
             return
-
+        first_frame = False
         while self.running:
             ret, frame = cap.read()
             if ret:
+                if not first_frame:
+                    self.stream_opened.emit()
+                    first_frame = True
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 h, w, ch = frame.shape
                 bytes_per_line = ch * w
