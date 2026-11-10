@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QCheckBox, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGroupBox, QRubberBand
-from PyQt5.QtGui import QPixmap, QIcon, QImage, QPainter, QColor
-from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal, QPoint, QRect
-from .logic import MultivisionBackend
+from PyQt5.QtWidgets import QLabel, QPushButton, QSlider, QCheckBox, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGroupBox
+from PyQt5.QtGui import QPixmap, QIcon, QImage
+from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal
+from .logic import SmartvisionBackend
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,36 +12,17 @@ class SelectionLabel(QLabel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
-        self.origin = QPoint()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.origin = event.pos()
-            self.area_selected.emit(self.origin.x(), self.origin.y(), 0, 0)
-"""
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.origin = event.pos()
-            self.rubberBand.setGeometry(QRect(self.origin, QSize()))
-            self.rubberBand.show()
+            self.area_selected.emit(event.x(), event.y(), 0, 0)
 
-    def mouseMoveEvent(self, event):
-        if not self.origin.isNull():
-            self.rubberBand.setGeometry(QRect(self.origin, event.pos()).normalized())
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.rubberBand.hide()
-            rect = self.rubberBand.geometry()
-            self.area_selected.emit(rect.x(), rect.y(), rect.width(), rect.height())
-"""
-class MultivisionClient(QWidget):
+class SmartvisionClient(QWidget):
     def __init__(self):
         super().__init__()
-        self.backend = MultivisionBackend()
+        self.backend = SmartvisionBackend()
         self._draw_ui()
-        
+
         # Connect backend signals
         self.backend.frame_ready.connect(self._on_frame_ready)
         self.backend.zoom_changed.connect(self._on_zoom_changed)
@@ -60,6 +41,7 @@ class MultivisionClient(QWidget):
         zoom_layout = QVBoxLayout()
         move_layout = QGridLayout()
         ai_layout = QVBoxLayout()
+        gimbal_layout = QVBoxLayout()
         control_layout = QVBoxLayout()
         # Widgets
         self.video_label = SelectionLabel()
@@ -68,6 +50,7 @@ class MultivisionClient(QWidget):
         self.slider.setMinimum(2)
         self.slider.setMaximum(10)
         self.slider.setSingleStep(1)
+        self.lock_pose_checkbox = QCheckBox("Lock Pose")
         self.track_zoom_checkbox = QCheckBox("Track Zoom")
         self.osd_checkbox = QCheckBox("Enable OSD")
         play_button = QPushButton('Play')
@@ -100,6 +83,7 @@ class MultivisionClient(QWidget):
         video_button = QPushButton("Video")
         zoom_gb = QGroupBox("Zoom")
         move_gb = QGroupBox("Move")
+        gimbal_gb = QGroupBox("Gimbal")
         ai_gb = QGroupBox("AI")
         control_gb = QGroupBox("Control")
         # Add widget to layout
@@ -122,9 +106,15 @@ class MultivisionClient(QWidget):
         move_layout.addWidget(left_button, 1, 0)
         move_layout.addWidget(right_button, 1, 2)
         move_layout.addWidget(reset_button, 3, 0, 1, 3)
+
+        right_layout.addWidget(gimbal_gb)
+        gimbal_gb.setLayout(gimbal_layout)
+        gimbal_layout.addWidget(self.lock_pose_checkbox)
+
         right_layout.addWidget(ai_gb)
         ai_gb.setLayout(ai_layout)
         ai_layout.addWidget(self.track_zoom_checkbox)
+
         right_layout.addWidget(control_gb)
         control_gb.setLayout(control_layout)
         control_layout.addWidget(picture_button)
@@ -167,6 +157,8 @@ class MultivisionClient(QWidget):
         
         reset_button.clicked.connect(self.backend.move_reset)
         
+        self.lock_pose_checkbox.stateChanged.connect(self.backend.set_lock_pose)
+
         self.track_zoom_checkbox.stateChanged.connect(self.backend.set_auto_zoom)
         
         picture_button.clicked.connect(self.backend.take_picture)

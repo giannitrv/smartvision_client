@@ -7,6 +7,7 @@ class Commands(Enum):
     SET_IMAGE_TYPE_CMD_ID   = 0x04
     TARGET_TRACKING_CMD_ID  = 0x05
     TRACKING_MODE_CMD_ID    = 0x06
+    LOCK_POSE_CMD_ID        = 0x07
 
 class Protocol():
 
@@ -70,6 +71,17 @@ class Protocol():
         message = bytearray()
         message.extend(Commands.TRACKING_MODE_CMD_ID.value.to_bytes(1, 'little'))
         message.extend(autoZoom.to_bytes(1, 'little'))
+        message.extend(0x00.to_bytes(1, 'little'))
+        message.extend(0x00.to_bytes(1, 'little'))
+        message.extend(0x00.to_bytes(1, 'little'))
+
+        return message
+
+    @staticmethod
+    def create_lock_pose_cmd(lock_pose):
+        message = bytearray()
+        message.extend(Commands.LOCK_POSE_CMD_ID.value.to_bytes(1, 'little'))
+        message.extend(lock_pose.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))
         message.extend(0x00.to_bytes(1, 'little'))

@@ -1,10 +1,10 @@
-# Multivision Client
+# Smartvision Client
 
 Client application for Smartvision System build in Pyqt5. The application provides access to server application RTSP stream and functions.
 
 ## Features
 
-- **Real-time Video Streaming**: Displays a live feed from the multivision system.
+- **Real-time Video Streaming**: Displays a live feed from the Smartvision System.
 - **Zoom Control**: Allows zoom control with a slider and buttons.
 - **PTZ Control**: Move camera.
 - **Auto Zoom**: Toggle auto zoom during target tracking.
@@ -35,21 +35,21 @@ Docker and docker-compose.
    docker compose down
    ```
 
-![Multivision Client](./docs/gui.png)
+![Smartvision Client](./docs/gui.png)
 
 ## How it works
 
 The application await for a broadcast message from the Smartvision System. The message has the following json structure:
 ```json
 {
-  "device": "multivision_system",
+  "device": "smartvision_system",
   "ip": "0.0.0.0",
   "rtsp": 8554,
   "cmd": 5005
 }
 ```
 
-After receiving the message, the application displays the RTSP stream from ip:rtsp/video and sends UDP commands to ip:cmd.
+After receiving the message, the application displays the RTSP stream from `rtsp://<ip>:<rtsp>/video` and sends UDP commands to `<ip>:<cmd>`.
 
 The GUI state is updated after every status message received from the server application. Status messages are sent every 500ms and have the following json structure:
 

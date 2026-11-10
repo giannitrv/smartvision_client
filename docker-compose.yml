@@ -1,16 +1,18 @@
 services:
-  qt-app:
+  smartvision_client:
     build: .
-    container_name: qt-app
+    container_name: smartvision_client
     environment:
       - DISPLAY=${DISPLAY}
-      - PULSE_SERVER=unix:/run/user/${UID}/pulse/native
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - /run/user/${UID}/pulse:/run/user/${UID}/pulse
-      - /run/user/${UID}/pulse/native:/run/user/${UID}/pulse/native
-    devices:
-      - /dev/snd
     network_mode: host # Permette al container di usare la rete dell'host
     stdin_open: true # Abilita l'interattività
     tty: true # Abilita l'accesso a una TTY (Terminale Virtuale)
+  ntp_server:
+    image: cturra/ntp:latest
+    container_name: ntp_server
+    ports:
+      - "123:123/udp"
+    environment:
+      - NTP_SERVERS=127.127.1.1
